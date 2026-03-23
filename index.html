@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BlackRoad App</title><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"><style>*{margin:0;box-sizing:border-box}body{background:#0a0a0a;color:#f5f5f5;font-family:'Inter',sans-serif;padding:20px;max-width:900px;margin:0 auto}.grad{height:1px;background:linear-gradient(90deg,#FF6B2B,#FF2255,#CC00AA,#8844FF,#4488FF,#00D4FF);margin-bottom:20px}.nav{display:flex;align-items:center;gap:8px;margin-bottom:32px}.dots{display:flex;gap:3px}.dots i{width:6px;height:6px;border-radius:50%;display:block}.nav-name{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:32px}.card{background:#131313;border:1px solid #1a1a1a;border-radius:10px;padding:16px;transition:border-color .15s}.card:hover{border-color:#262626}.card h3{font-size:15px;margin-bottom:4px}.card p{font-size:12px;color:#525252}.card .stat{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;margin-bottom:4px}.label{font-family:'JetBrains Mono',monospace;font-size:10px;color:#333;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}a{color:#737373;text-decoration:none;font-size:13px}</style></head><body>
+<div class="grad"></div>
+<nav class="nav"><div class="dots"><i style="background:#FF6B2B"></i><i style="background:#FF2255"></i><i style="background:#CC00AA"></i><i style="background:#8844FF"></i><i style="background:#4488FF"></i><i style="background:#00D4FF"></i></div><span class="nav-name">BlackRoad</span></nav>
+<div class="label">Dashboard</div>
+<div class="grid" id="kpis"></div>
+<div class="label">Products</div>
+<div class="grid">
+<a href="https://search.blackroad.io" class="card"><h3>RoadView</h3><p>Truth-first search</p></a>
+<a href="https://social.blackroad.io" class="card"><h3>BackRoad</h3><p>Social without sickness</p></a>
+<a href="https://tutor.blackroad.io" class="card"><h3>RoadWork</h3><p>AI tutoring</p></a>
+<a href="https://pay.blackroad.io" class="card"><h3>CashRoad</h3><p>Financial clarity</p></a>
+<a href="https://radio.blackroad.io" class="card"><h3>SoundRoad</h3><p>Music studio</p></a>
+<a href="https://video.blackroad.io" class="card"><h3>RoadTube</h3><p>Video platform</p></a>
+<a href="https://game.blackroad.io" class="card"><h3>RoadWorld</h3><p>3D engine</p></a>
+<a href="https://docs.blackroad.io" class="card"><h3>Docs</h3><p>Documentation</p></a>
+<a href="https://agents.blackroad.io" class="card"><h3>Agents</h3><p>AI agent profiles</p></a>
+<a href="https://status.blackroad.io" class="card"><h3>Status</h3><p>System health</p></a>
+</div>
+<div class="label">Fleet</div>
+<div class="grid" id="nodes"></div>
+<script>
+fetch('/api/stats').then(r=>r.json()).then(d=>{document.getElementById('kpis').innerHTML=[['Agents',d.agents||1000],['Repos',d.repos||682],['Domains',d.domains||20],['Nodes',d.nodes||7],['TOPS',d.inference_tops||52],['Cost','$38/mo']].map(([l,v])=>'<div class="card"><div class="stat">'+v+'</div><p>'+l+'</p></div>').join('')}).catch(()=>{});
+const nodes=[{n:'Alice',r:'Gateway',s:true},{n:'Cecilia',r:'AI Inference',s:true},{n:'Octavia',r:'Git/Workers',s:true},{n:'Lucidia',r:'DNS/Apps',s:true},{n:'Aria',r:'Services',s:true},{n:'Gematria',r:'TLS Edge',s:true},{n:'Anastasia',r:'Backup',s:true}];
+document.getElementById('nodes').innerHTML=nodes.map(n=>'<div class="card"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:6px;height:6px;border-radius:50%;background:'+(n.s?'#a3a3a3':'#333')+'"></div><h3>'+n.n+'</h3></div><p>'+n.r+'</p></div>').join('');
+</script></body></html>
