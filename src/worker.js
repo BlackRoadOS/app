@@ -830,6 +830,6 @@ function openPalette(){
 function closePalette(){paletteOpen=false;var el=document.getElementById('cmdPalette');if(el)el.style.display='none'}
 function runCmd(i){COMMANDS[i].action();closePalette()}
 </script>
-</body>
+<script>!function(){var s=sessionStorage.getItem("br_sid")||crypto.randomUUID().slice(0,12);sessionStorage.setItem("br_sid",s);fetch("https://analytics-blackroad.blackroad.workers.dev/pageview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:location.pathname,referrer:document.referrer,session_id:s,screen_w:screen.width,screen_h:screen.height,lang:navigator.language})}).catch(function(){});}();</script></body>
 </html>`;
 }
