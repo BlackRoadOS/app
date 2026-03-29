@@ -280,6 +280,12 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
     <!-- D: Overview with agents -->
     <div id="panel-overview">
       <h2>Welcome back</h2>
+      <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+        <button onclick="window.open('https://chat.blackroad.io','_blank')" style="padding:10px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--white);font-size:13px;font-family:var(--sg);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#333'" onmouseout="this.style.borderColor='var(--border)'">New Chat</button>
+        <button onclick="showPanel('search');document.getElementById('searchBox').focus()" style="padding:10px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--white);font-size:13px;font-family:var(--sg);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#333'" onmouseout="this.style.borderColor='var(--border)'">Search</button>
+        <button onclick="showPanel('fleet')" style="padding:10px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--white);font-size:13px;font-family:var(--sg);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#333'" onmouseout="this.style.borderColor='var(--border)'">View Fleet</button>
+        <button onclick="showPanel('agents')" style="padding:10px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--white);font-size:13px;font-family:var(--sg);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#333'" onmouseout="this.style.borderColor='var(--border)'">All Agents</button>
+      </div>
       <div class="grid-3">
         <div class="stat-card"><div class="stat-label">Agents</div><div class="stat-value" id="statAgents">--</div><div class="stat-sub">fleet-wide</div></div>
         <div class="stat-card"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes">--</div><div class="stat-sub">online right now</div></div>
