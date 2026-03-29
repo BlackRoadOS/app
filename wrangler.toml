@@ -3,7 +3,11 @@ main = "src/worker.js"
 compatibility_date = "2024-12-01"
 workers_dev = true
 
+routes = [
+  { pattern = "app.blackroad.io/*", zone_name = "blackroad.io" }
+]
+
 [vars]
-AUTH_URL = "https://auth-blackroad.amundsonalexa.workers.dev"
-PAY_URL = "https://roadpay.amundsonalexa.workers.dev"
-CHAT_URL = "https://chat-blackroad.amundsonalexa.workers.dev"
+AUTH_URL = "https://auth.blackroad.io"
+PAY_URL = "https://pay.blackroad.io"
+CHAT_URL = "https://chat.blackroad.io"

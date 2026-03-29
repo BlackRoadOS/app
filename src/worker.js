@@ -2,11 +2,12 @@
 // A: Landing + Login  B: Auth gate  C: Dashboard  D: Agents  E: Chat
 // BlackRoad OS, Inc. All rights reserved.
 
-const AUTH_URL = 'http://192.168.4.101:9003';
-const ROUNDTRIP_URL = 'http://192.168.4.101:9016';
-const CHAT_URL = 'http://192.168.4.101:9009';
-const SEARCH_URL = 'http://192.168.4.101:9002';
-const FLEET_URL = 'https://prism.blackroad.io';
+// Use workers.dev URLs to avoid CF same-zone fetch issues
+const AUTH_URL = 'https://auth-blackroad.blackroad.workers.dev';
+const ROUNDTRIP_URL = 'https://roadtrip-blackroad.blackroad.workers.dev';
+const CHAT_URL = 'https://chat-blackroad.blackroad.workers.dev';
+const SEARCH_URL = 'https://road-search.blackroad.workers.dev';
+const FLEET_URL = 'https://status-blackroad.blackroad.workers.dev';
 
 export default {
   async fetch(request, env) {
@@ -15,20 +16,46 @@ export default {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-    // Auth callback
-    if (path === '/auth/callback' && request.method === 'POST') {
-      const body = await request.json();
-      // Proxy to auth worker
+    // Auth — proxy signin/signup to real auth worker
+    if (path === '/auth/signin' && request.method === 'POST') {
       try {
-        const res = await fetch(AUTH_URL + '/api/login', {
+        const res = await fetch(AUTH_URL + '/api/signin', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: await request.text(), redirect: 'manual',
         });
         const data = await res.json();
         return Response.json(data, { headers: cors });
-      } catch (e) {
-        return Response.json({ error: e.message }, { status: 502, headers: cors });
-      }
+      } catch (e) { return Response.json({ error: e.message }, { status: 502, headers: cors }); }
+    }
+    if (path === '/auth/signup' && request.method === 'POST') {
+      try {
+        const res = await fetch(AUTH_URL + '/api/signup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: await request.text(), redirect: 'manual',
+        });
+        const data = await res.json();
+        return Response.json(data, { headers: cors });
+      } catch (e) { return Response.json({ error: e.message }, { status: 502, headers: cors }); }
+    }
+    if (path === '/auth/me' && request.method === 'GET') {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader) return Response.json({ error: 'No token' }, { status: 401, headers: cors });
+      try {
+        const res = await fetch(AUTH_URL + '/api/me', {
+          headers: { 'Authorization': authHeader }, redirect: 'manual',
+        });
+        const data = await res.json();
+        return Response.json(data, { headers: cors });
+      } catch (e) { return Response.json({ error: e.message }, { status: 502, headers: cors }); }
+    }
+
+    // KPIs — proxy to status worker
+    if (path === '/api/kpis') {
+      try {
+        const res = await fetch(FLEET_URL + '/api/kpis', { redirect: 'manual' });
+        const data = await res.json();
+        return Response.json(data, { headers: cors });
+      } catch (e) { return Response.json({ error: e.message }, { status: 502, headers: cors }); }
     }
 
     // Proxy to roundtrip agents
@@ -162,7 +189,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
 }
 </style>
 </head>
-<body>
+<body><style id="br-nav-style">#br-nav{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(0,0,0,0.92);backdrop-filter:blur(12px);border-bottom:1px solid #1a1a1a;font-family:'Space Grotesk',-apple-system,sans-serif}#br-nav .ni{max-width:1200px;margin:0 auto;padding:0 20px;height:48px;display:flex;align-items:center;justify-content:space-between}#br-nav .nl{display:flex;align-items:center;gap:12px}#br-nav .nb{color:#666;font-size:12px;padding:6px 8px;border-radius:6px;display:flex;align-items:center;cursor:pointer;border:none;background:none;transition:color .15s}#br-nav .nb:hover{color:#f5f5f5}#br-nav .nh{text-decoration:none;display:flex;align-items:center;gap:8px}#br-nav .nm{display:flex;gap:2px}#br-nav .nm span{width:6px;height:6px;border-radius:50%}#br-nav .nt{color:#f5f5f5;font-weight:600;font-size:14px}#br-nav .ns{color:#333;font-size:14px}#br-nav .np{color:#999;font-size:13px}#br-nav .nk{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none}#br-nav .nk::-webkit-scrollbar{display:none}#br-nav .nk a{color:#888;text-decoration:none;font-size:12px;padding:6px 10px;border-radius:6px;white-space:nowrap;transition:color .15s,background .15s}#br-nav .nk a:hover{color:#f5f5f5;background:#111}#br-nav .nk a.ac{color:#f5f5f5;background:#1a1a1a}#br-nav .mm{display:none;background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:6px}#br-dd{display:none;position:fixed;top:48px;left:0;right:0;background:rgba(0,0,0,0.96);backdrop-filter:blur(12px);border-bottom:1px solid #1a1a1a;z-index:9998;padding:12px 20px}#br-dd.open{display:flex;flex-wrap:wrap;gap:4px}#br-dd a{color:#888;text-decoration:none;font-size:13px;padding:8px 14px;border-radius:6px;transition:color .15s,background .15s}#br-dd a:hover,#br-dd a.ac{color:#f5f5f5;background:#111}body{padding-top:48px!important}@media(max-width:768px){#br-nav .nk{display:none}#br-nav .mm{display:block}}</style><nav id="br-nav"><div class="ni"><div class="nl"><button class="nb" onclick="history.length>1?history.back():location.href='https://blackroad.io'" title="Back">&larr;</button><a href="https://blackroad.io" class="nh"><div class="nm"><span style="background:#FF6B2B"></span><span style="background:#FF2255"></span><span style="background:#CC00AA"></span><span style="background:#8844FF"></span><span style="background:#4488FF"></span><span style="background:#00D4FF"></span></div><span class="nt">BlackRoad</span></a><span class="ns">/</span><span class="np">Dashboard</span></div><div class="nk"><a href="https://blackroad.io">Home</a><a href="https://chat.blackroad.io">Chat</a><a href="https://search.blackroad.io">Search</a><a href="https://tutor.blackroad.io">Tutor</a><a href="https://pay.blackroad.io">Pay</a><a href="https://canvas.blackroad.io">Canvas</a><a href="https://cadence.blackroad.io">Cadence</a><a href="https://video.blackroad.io">Video</a><a href="https://radio.blackroad.io">Radio</a><a href="https://game.blackroad.io">Game</a><a href="https://roundtrip.blackroad.io">Agents</a><a href="https://roadcode.blackroad.io">RoadCode</a><a href="https://hq.blackroad.io">HQ</a><a href="https://app.blackroad.io" class="ac">Dashboard</a></div><button class="mm" onclick="document.getElementById('br-dd').classList.toggle('open')">&#9776;</button></div></nav><div id="br-dd"><a href="https://blackroad.io">Home</a><a href="https://chat.blackroad.io">Chat</a><a href="https://search.blackroad.io">Search</a><a href="https://tutor.blackroad.io">Tutor</a><a href="https://pay.blackroad.io">Pay</a><a href="https://canvas.blackroad.io">Canvas</a><a href="https://cadence.blackroad.io">Cadence</a><a href="https://video.blackroad.io">Video</a><a href="https://radio.blackroad.io">Radio</a><a href="https://game.blackroad.io">Game</a><a href="https://roundtrip.blackroad.io">Agents</a><a href="https://roadcode.blackroad.io">RoadCode</a><a href="https://hq.blackroad.io">HQ</a><a href="https://app.blackroad.io" class="ac">Dashboard</a></div><script>document.addEventListener('click',function(e){var d=document.getElementById('br-dd');if(d&&d.classList.contains('open')&&!e.target.closest('#br-nav')&&!e.target.closest('#br-dd'))d.classList.remove('open')});</script>
 <div class="grad-bar"></div>
 
 <!-- ═══ A: LOGIN ═══ -->
@@ -182,6 +209,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
         <input class="form-input" type="password" id="loginPass" placeholder="Enter password">
       </div>
       <button class="btn-auth" onclick="doLogin()">Sign in</button>
+      <p style="text-align:center;margin-top:12px;font-size:13px;opacity:.4">No account? <a href="#" onclick="doSignup();return false" style="color:#fff;text-decoration:underline">Sign up</a></p>
       <p class="auth-footer">Pick up your agent. Ride the BlackRoad together.</p>
     </div>
   </div>
@@ -190,8 +218,8 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
     <div class="auth-orb auth-orb-2"></div>
     <div class="auth-orb auth-orb-3"></div>
     <div class="auth-visual-content">
-      <h2>Pave Tomorrow.</h2>
-      <p>62 agents. 5 nodes. 26 TOPS. Your entire AI fleet, in one place. Runs on anything you own.</p>
+      <h2>Remember the Road. Pave Tomorrow.</h2>
+      <p>18 agents. 7 nodes. 52 TOPS. 1,339 repos. Your entire AI fleet, in one place.</p>
     </div>
   </div>
 </div>
@@ -203,7 +231,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
   <div class="topbar">
     <div class="topbar-logo"><div class="topbar-mark"></div>BlackRoad</div>
     <div class="topbar-search"><input placeholder="Search everything..." id="searchInput" onkeydown="if(event.key==='Enter')doSearch()"></div>
-    <div class="topbar-user"><div class="topbar-dot"></div><span id="userName">Alexa</span></div>
+    <div class="topbar-user"><div class="topbar-dot"></div><span id="userName">User</span> <span onclick="doLogout()" style="cursor:pointer;opacity:.3;margin-left:8px;font-size:11px">[logout]</span></div>
   </div>
 
   <!-- Sidebar -->
@@ -233,8 +261,8 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
     <div id="panel-overview">
       <h2>Welcome back</h2>
       <div class="grid-3">
-        <div class="stat-card"><div class="stat-label">Agents</div><div class="stat-value" id="statAgents">62</div><div class="stat-sub">across 10 groups</div></div>
-        <div class="stat-card"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes">6</div><div class="stat-sub">online right now</div></div>
+        <div class="stat-card"><div class="stat-label">Agents</div><div class="stat-value" id="statAgents">--</div><div class="stat-sub">fleet-wide</div></div>
+        <div class="stat-card"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes">--</div><div class="stat-sub">online right now</div></div>
         <div class="stat-card"><div class="stat-label">Vision</div><div class="stat-value">52</div><div class="stat-sub">TOPS (Hailo-8 x2)</div></div>
       </div>
       <h2>Fleet</h2>
@@ -265,7 +293,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
       <div class="grid-3" id="hailoModels"></div>
     </div>
 
-    <div id="panel-code" style="display:none"><h2>Code</h2><p style="opacity:.4">629 repos on RoadCode (Gitea)</p><iframe src="https://git.blackroad.io" style="width:100%;height:600px;border:1px solid var(--border);border-radius:10px;margin-top:12px"></iframe></div>
+    <div id="panel-code" style="display:none"><h2>Code</h2><p style="opacity:.4">1,339 repos across GitHub + Gitea</p><iframe src="https://git.blackroad.io" style="width:100%;height:600px;border:1px solid var(--border);border-radius:10px;margin-top:12px"></iframe></div>
     <div id="panel-billing" style="display:none"><h2>Billing</h2><p style="opacity:.4">RoadPay — 4 plans</p></div>
   </div>
 
@@ -277,28 +305,84 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
 </div>
 
 <script>
-// ═══ B: AUTH ═══
-function doLogin() {
+// ═══ B: AUTH (real) ═══
+var authToken = localStorage.getItem('br_token');
+var authUser = JSON.parse(localStorage.getItem('br_user') || 'null');
+
+async function doLogin() {
   const email = document.getElementById('loginEmail').value;
   const pass = document.getElementById('loginPass').value;
-  if (!email) return;
-  // Store session
-  localStorage.setItem('br_user', JSON.stringify({ email, name: email.split('@')[0], logged_in: Date.now() }));
-  enterDashboard();
+  if (!email || !pass) return;
+  const btn = document.querySelector('.btn-auth');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  try {
+    const r = await fetch('/auth/signin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass}) });
+    const d = await r.json();
+    if (d.token) {
+      authToken = d.token;
+      authUser = d.user || { email, name: email.split('@')[0] };
+      localStorage.setItem('br_token', authToken);
+      localStorage.setItem('br_user', JSON.stringify(authUser));
+      enterDashboard();
+    } else {
+      btn.textContent = d.error || 'Invalid credentials';
+      setTimeout(() => { btn.textContent = 'Sign in'; btn.disabled = false; }, 2000);
+    }
+  } catch(e) {
+    btn.textContent = 'Connection error';
+    setTimeout(() => { btn.textContent = 'Sign in'; btn.disabled = false; }, 2000);
+  }
+}
+
+async function doSignup() {
+  const email = document.getElementById('loginEmail').value;
+  const pass = document.getElementById('loginPass').value;
+  if (!email || !pass) return;
+  try {
+    const r = await fetch('/auth/signup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass, name: email.split('@')[0]}) });
+    const d = await r.json();
+    if (d.token) {
+      authToken = d.token;
+      authUser = d.user || { email, name: email.split('@')[0] };
+      localStorage.setItem('br_token', authToken);
+      localStorage.setItem('br_user', JSON.stringify(authUser));
+      enterDashboard();
+    } else {
+      alert(d.error || 'Signup failed');
+    }
+  } catch(e) { alert('Connection error'); }
+}
+
+function doLogout() {
+  localStorage.removeItem('br_token');
+  localStorage.removeItem('br_user');
+  authToken = null; authUser = null;
+  document.getElementById('dashView').classList.remove('active');
+  document.getElementById('loginView').classList.remove('hidden');
 }
 
 function enterDashboard() {
   document.getElementById('loginView').classList.add('hidden');
   document.getElementById('dashView').classList.add('active');
-  const user = JSON.parse(localStorage.getItem('br_user') || '{}');
-  document.getElementById('userName').textContent = user.name || 'User';
+  document.getElementById('userName').textContent = (authUser && authUser.name) || 'User';
+  loadKPIs();
   loadAgents();
   loadFleet();
   loadHailo();
 }
 
-// Auto-login if session exists
-if (localStorage.getItem('br_user')) enterDashboard();
+async function loadKPIs() {
+  try {
+    const r = await fetch('/api/kpis');
+    const d = await r.json();
+    const s = d.summary || {};
+    if (s.agents) document.getElementById('statAgents').textContent = s.agents;
+    if (s.fleet_nodes) document.getElementById('statNodes').textContent = s.fleet_nodes + '/7';
+  } catch {}
+}
+
+// Auto-login if token exists
+if (authToken) enterDashboard();
 
 // ═══ D: AGENTS ═══
 async function loadAgents() {
@@ -377,9 +461,18 @@ function doSearch() {
   showPanel('search');
   document.getElementById('searchBox').value = q;
   document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">Searching...</p>';
-  fetch('/agents/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'roadsearch', message: q, channel: 'search' }) })
+  fetch('https://search.blackroad.io/api/search?q=' + encodeURIComponent(q))
     .then(r => r.json())
-    .then(d => { document.getElementById('searchResults').innerHTML = '<div class="stat-card"><div class="stat-label">Result</div><p style="margin-top:8px;font-size:14px;line-height:1.6">' + (d.reply || 'No results') + '</p></div>'; })
+    .then(d => {
+      const results = d.results || d.items || [];
+      if (!results.length) { document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">No results for "' + q + '"</p>'; return; }
+      document.getElementById('searchResults').innerHTML = results.map(r =>
+        '<div class="stat-card" style="margin-bottom:8px;cursor:pointer" onclick="window.open(\\'' + (r.url||'#') + '\\',\\'_blank\\')">' +
+        '<div class="stat-label">' + (r.domain || '') + '</div>' +
+        '<div style="font-size:14px;font-weight:600;margin-top:4px">' + (r.title || 'Result') + '</div>' +
+        '<p style="margin-top:4px;font-size:12px;opacity:.5;line-height:1.5">' + (r.description || r.snippet || '').slice(0,200) + '</p></div>'
+      ).join('');
+    })
     .catch(() => { document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">Search unavailable</p>'; });
 }
 </script>
