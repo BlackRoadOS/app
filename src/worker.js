@@ -78,9 +78,67 @@ export default {
       return Response.json({ status: 'up', service: 'app.blackroad.io', version: '1.0.0' }, { headers: cors });
     }
 
+    // SSE notifications stream
+    if (path === '/api/notifications') {
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const encoder = new TextEncoder();
+      const write = (data) => writer.write(encoder.encode('data: ' + JSON.stringify(data) + '\\n\\n'));
+
+      // Send initial connection event
+      write({ type: 'connected', ts: new Date().toISOString() });
+
+      // Fetch latest agent messages as notifications
+      try {
+        const res = await fetch(ROUNDTRIP_URL + '/api/messages?channel=general&limit=3');
+        const msgs = await res.json();
+        for (const m of (msgs || []).slice(0, 3)) {
+          write({ type: 'agent_message', agent: m.sender || m.sender_name, content: (m.content || '').slice(0, 100), ts: m.created_at });
+        }
+      } catch {}
+
+      // Fetch fleet status
+      try {
+        const res = await fetch(FLEET_URL + '/api/kpis');
+        const d = await res.json();
+        write({ type: 'kpi_update', agents: d.summary?.agents, nodes: d.summary?.fleet_nodes, sites_up: d.collected?.sites?.up });
+      } catch {}
+
+      write({ type: 'done' });
+      writer.close();
+
+      return new Response(readable, {
+        headers: { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+      });
+    }
+
     // PWA manifest
     if (path === '/manifest.json') {
       return Response.json({ name: 'BlackRoad OS', short_name: 'BlackRoad', start_url: '/', display: 'standalone', background_color: '#000000', theme_color: '#FF2255', icons: [{ src: 'https://images.blackroad.io/pixel-art/road-logo.png', sizes: '192x192', type: 'image/png' }, { src: 'https://images.blackroad.io/pixel-art/road-logo.png', sizes: '512x512', type: 'image/png' }] }, { headers: { ...cors, 'Content-Type': 'application/manifest+json' } });
+    }
+
+    // SSE notifications stream
+    if (path === '/api/notifications/stream') {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          // Send initial connection event
+          controller.enqueue(encoder.encode('event: connected\ndata: {"status":"connected"}\n\n'));
+          // Poll RoadTrip for new messages every 10s (up to 60s total)
+          for (let i = 0; i < 6; i++) {
+            await new Promise(r => setTimeout(r, 10000));
+            try {
+              const res = await fetch('https://roadtrip-blackroad.blackroad.workers.dev/api/messages?channel=general&limit=1');
+              const msgs = await res.json();
+              if (msgs.length > 0) {
+                controller.enqueue(encoder.encode('event: message\ndata: ' + JSON.stringify(msgs[0]) + '\n\n'));
+              }
+            } catch {}
+          }
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
     }
 
     // Service worker
@@ -266,8 +324,10 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
       <div class="side-label">Tools</div>
       <div class="side-item" onclick="showPanel('search')"><span class="side-icon">?</span> Search</div>
       <div class="side-item" onclick="showPanel('vision')"><span class="side-icon">@</span> Vision</div>
+      <div class="side-item" onclick="showPanel('notifications')"><span class="side-icon">!</span> Alerts</div>
       <div class="side-item" onclick="showPanel('billing')"><span class="side-icon">$</span> Billing</div>
       <div class="side-item" onclick="showPanel('settings')"><span class="side-icon">%</span> Settings</div>
+      <div class="side-item" onclick="showPanel('admin')"><span class="side-icon">*</span> Admin</div>
     </div>
     <div class="side-section">
       <div class="side-label">Fleet Nodes</div>
@@ -305,8 +365,15 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
     </div>
 
     <div id="panel-fleet" style="display:none">
-      <h2>Fleet Status</h2>
-      <div id="fleetDetail"></div>
+      <h2>Fleet Map</h2>
+      <div id="fleetMap" style="position:relative;height:300px;background:#050510;border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden"></div>
+      <h3 style="margin-bottom:8px">Node Details</h3>
+      <div id="fleetDetail" class="grid-3"></div>
+    </div>
+
+    <div id="panel-notifications" style="display:none">
+      <h2>Notifications</h2>
+      <div id="notifList" style="max-height:500px;overflow-y:auto"></div>
     </div>
 
     <div id="panel-search" style="display:none">
@@ -323,6 +390,27 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
 
     <div id="panel-code" style="display:none"><h2>Code</h2><p style="opacity:.4">1,339 repos across GitHub + Gitea</p><iframe src="https://git.blackroad.io" style="width:100%;height:600px;border:1px solid var(--border);border-radius:10px;margin-top:12px"></iframe></div>
     <div id="panel-billing" style="display:none"><h2>Billing</h2><p style="opacity:.4">RoadPay — 4 plans</p></div>
+
+    <div id="panel-admin" style="display:none">
+      <h2>Admin Panel</h2>
+      <div class="grid-3" style="margin-top:12px">
+        <div class="stat-card"><div class="stat-label">Workers</div><div class="stat-value" id="adminWorkers">496</div></div>
+        <div class="stat-card"><div class="stat-label">D1 Databases</div><div class="stat-value">34</div></div>
+        <div class="stat-card"><div class="stat-label">KV Namespaces</div><div class="stat-value">20</div></div>
+        <div class="stat-card"><div class="stat-label">R2 Buckets</div><div class="stat-value">13</div></div>
+        <div class="stat-card"><div class="stat-label">Domains</div><div class="stat-value">20</div></div>
+        <div class="stat-card"><div class="stat-label">GitHub Orgs</div><div class="stat-value">37</div></div>
+      </div>
+      <h3 style="margin-top:24px;margin-bottom:8px">Products</h3>
+      <div id="adminProducts" class="grid-3"></div>
+      <h3 style="margin-top:24px;margin-bottom:8px">Quick Actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-auth" style="width:auto;padding:8px 16px;font-size:12px" onclick="window.open('https://dash.cloudflare.com','_blank')">CF Dashboard</button>
+        <button class="btn-auth" style="width:auto;padding:8px 16px;font-size:12px" onclick="window.open('https://dashboard.stripe.com','_blank')">Stripe</button>
+        <button class="btn-auth" style="width:auto;padding:8px 16px;font-size:12px" onclick="window.open('https://dashboard.clerk.com','_blank')">Clerk</button>
+        <button class="btn-auth" style="width:auto;padding:8px 16px;font-size:12px" onclick="window.open('https://github.com/orgs/BlackRoadOS','_blank')">GitHub</button>
+      </div>
+    </div>
 
     <div id="panel-settings" style="display:none">
       <h2>Settings</h2>
@@ -358,6 +446,9 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
       </div>
     </div>
   </div>
+
+  <!-- Notification toasts -->
+  <div id="notifArea" style="position:fixed;top:60px;right:20px;z-index:9998;display:flex;flex-direction:column;gap:8px;max-width:320px"></div>
 
   <!-- E: Chat panel -->
   <div class="chat-panel">
@@ -432,6 +523,7 @@ function enterDashboard() {
   loadFleet();
   loadHailo();
   loadActivity();
+  startNotifications();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   if (!localStorage.getItem('br_onboarded')) showOnboarding();
 }
@@ -489,6 +581,31 @@ async function loadActivity() {
         + '<div style="font-size:12px;opacity:.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">' + (m.content || '').slice(0, 120) + '</div></div></div>';
     }).join('');
   } catch(e) { document.getElementById('activityFeed').innerHTML = '<div style="opacity:.3;font-size:13px">Activity unavailable</div>'; }
+}
+
+// ═══ NOTIFICATIONS (SSE) ═══
+function startNotifications() {
+  try {
+    var es = new EventSource('/api/notifications');
+    es.onmessage = function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.type === 'agent_message') showNotif(d.agent + ': ' + d.content);
+        if (d.type === 'kpi_update' && d.sites_up) showNotif('Fleet: ' + d.nodes + ' nodes, ' + d.sites_up + ' sites up');
+        if (d.type === 'done') es.close();
+      } catch(err) {}
+    };
+    es.onerror = function() { es.close(); };
+  } catch(err) {}
+}
+function showNotif(text) {
+  var area = document.getElementById('notifArea');
+  var el = document.createElement('div');
+  el.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;opacity:0;transition:opacity .3s;box-shadow:0 4px 12px rgba(0,0,0,.3)';
+  el.textContent = text;
+  area.appendChild(el);
+  setTimeout(function() { el.style.opacity = '1'; }, 50);
+  setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 5000);
 }
 
 // ═══ D: AGENTS ═══
@@ -616,6 +733,51 @@ function setTheme(t, quiet) {
   if (!quiet) { var el = document.getElementById('settingsSaved'); el.style.opacity = '1'; setTimeout(function(){ el.style.opacity = '0'; }, 1500); }
 }
 loadSettings();
+
+// ═══ FLEET MAP ═══
+function renderFleetMap() {
+  var map = document.getElementById('fleetMap');
+  if (!map) return;
+  var nodes = [
+    {name:'Alice',x:20,y:50,color:'#FF1D6C',online:true},
+    {name:'Cecilia',x:40,y:30,color:'#F5A623',online:true},
+    {name:'Octavia',x:60,y:70,color:'#9C27B0',online:false},
+    {name:'Aria',x:35,y:70,color:'#2979FF',online:true},
+    {name:'Lucidia',x:55,y:40,color:'#00E676',online:true},
+    {name:'Gematria',x:80,y:25,color:'#FF1D6C',online:true},
+    {name:'Anastasia',x:85,y:60,color:'#F5A623',online:true},
+    {name:'Alexandria',x:15,y:30,color:'#4488FF',online:true},
+  ];
+  var svg = '<svg width="100%" height="100%" viewBox="0 0 100 100">';
+  // Draw connections
+  for(var i=0;i<nodes.length;i++) for(var j=i+1;j<nodes.length;j++) {
+    if(nodes[i].online&&nodes[j].online) svg+='<line x1="'+nodes[i].x+'" y1="'+nodes[i].y+'" x2="'+nodes[j].x+'" y2="'+nodes[j].y+'" stroke="#1a1a2e" stroke-width="0.3"/>';
+  }
+  // Draw nodes
+  nodes.forEach(function(n){
+    var fill=n.online?n.color:'#333';
+    svg+='<circle cx="'+n.x+'" cy="'+n.y+'" r="2.5" fill="'+fill+'" opacity="'+(n.online?1:0.3)+'"/>';
+    svg+='<text x="'+n.x+'" y="'+(n.y+5)+'" fill="'+(n.online?'#ccc':'#444')+'" font-size="2.8" text-anchor="middle" font-family="Space Grotesk">'+n.name+'</text>';
+    if(n.online) svg+='<circle cx="'+n.x+'" cy="'+n.y+'" r="4" fill="'+n.color+'" opacity="0.1"><animate attributeName="r" values="3;6;3" dur="3s" repeatCount="indefinite"/></circle>';
+  });
+  svg+='</svg>';
+  map.innerHTML=svg;
+}
+
+// ═══ NOTIFICATIONS ═══
+async function loadNotifications() {
+  var el=document.getElementById('notifList');
+  if(!el) return;
+  try {
+    var r=await fetch('https://roadtrip.blackroad.io/api/messages?channel=general&limit=10');
+    var msgs=await r.json();
+    el.innerHTML=msgs.map(function(m){
+      return '<div class="stat-card" style="margin-bottom:6px"><div class="stat-label">'+m.sender_name+'</div><div style="font-size:13px;margin-top:4px">'+m.content.slice(0,200)+'</div><div style="font-size:10px;opacity:.3;margin-top:4px">'+m.created_at+'</div></div>';
+    }).join('') || '<p style="opacity:.3">No notifications</p>';
+  } catch { el.innerHTML='<p style="opacity:.3">Could not load</p>'; }
+}
+loadNotifications();
+renderFleetMap();
 
 // ═══ COMMAND PALETTE (Cmd+K) ═══
 var paletteOpen = false;
