@@ -293,7 +293,9 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
       </div>
       <h2>Fleet</h2>
       <div class="fleet-strip" id="fleetStrip"></div>
-      <h2 style="margin-top:24px">Agents</h2>
+      <h2 style="margin-top:24px">Recent Activity</h2>
+      <div id="activityFeed" style="margin-bottom:24px"><div style="opacity:.3;font-size:13px">Loading activity...</div></div>
+      <h2>Agents</h2>
       <div class="agent-grid" id="agentGrid"></div>
     </div>
 
@@ -429,6 +431,7 @@ function enterDashboard() {
   loadAgents();
   loadFleet();
   loadHailo();
+  loadActivity();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   if (!localStorage.getItem('br_onboarded')) showOnboarding();
 }
@@ -470,6 +473,24 @@ async function loadKPIs() {
 // Auto-login if token exists
 if (authToken) enterDashboard();
 
+// ═══ ACTIVITY FEED ═══
+async function loadActivity() {
+  try {
+    const res = await fetch('https://roadtrip-blackroad.blackroad.workers.dev/api/messages?channel=general&limit=8');
+    const msgs = await res.json();
+    const feed = document.getElementById('activityFeed');
+    if (!msgs.length) { feed.innerHTML = '<div style="opacity:.3;font-size:13px">No recent activity</div>'; return; }
+    feed.innerHTML = msgs.map(function(m) {
+      var time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      var sender = m.sender || m.agent || 'unknown';
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">'
+        + '<div style="width:28px;height:28px;border-radius:50%;background:var(--elevated);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0">' + sender[0].toUpperCase() + '</div>'
+        + '<div style="min-width:0"><div style="font-size:12px;font-weight:600">' + sender + ' <span style="opacity:.3;font-weight:400">' + time + '</span></div>'
+        + '<div style="font-size:12px;opacity:.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">' + (m.content || '').slice(0, 120) + '</div></div></div>';
+    }).join('');
+  } catch(e) { document.getElementById('activityFeed').innerHTML = '<div style="opacity:.3;font-size:13px">Activity unavailable</div>'; }
+}
+
 // ═══ D: AGENTS ═══
 async function loadAgents() {
   try {
@@ -501,23 +522,26 @@ function chatAgent(id) {
 
 // ═══ F: FLEET ═══
 async function loadFleet() {
-  const nodes = [
-    { name: 'Alice', ip: '192.168.4.49', role: 'Gateway' },
-    { name: 'Cecilia', ip: '192.168.4.96', role: 'AI Engine' },
-    { name: 'Octavia', ip: '192.168.4.101', role: 'Architect' },
-    { name: 'Lucidia', ip: '192.168.4.38', role: 'Dreamer' },
-    { name: 'Gematria', ip: '159.65.43.12', role: 'Edge' },
-    { name: 'Anastasia', ip: '174.138.44.45', role: 'Cloud' },
-  ];
-  const strip = document.getElementById('fleetStrip');
-  const side = document.getElementById('sideFleet');
-  strip.innerHTML = nodes.map(n =>
-    '<div class="fleet-node"><div class="fleet-dot" style="background:#4ade80"></div>' + n.name + ' <span style="opacity:.3;font-size:10px">' + n.role + '</span></div>'
-  ).join('');
-  side.innerHTML = nodes.map(n =>
-    '<div class="side-item"><span class="side-icon" style="color:#4ade80;font-size:8px">*</span> ' + n.name + '</div>'
-  ).join('');
-  document.getElementById('statNodes').textContent = nodes.length;
+  // Get real agent status from RoadTrip heartbeat API
+  try {
+    const res = await fetch('https://roadtrip.blackroad.io/api/agents');
+    const agents = await res.json();
+    const fleet = agents.filter(a => a.type === 'compute');
+    const strip = document.getElementById('fleetStrip');
+    const side = document.getElementById('sideFleet');
+    const online = fleet.filter(a => a.online).length;
+    strip.innerHTML = fleet.map(a => {
+      const color = a.online ? '#4ade80' : '#666';
+      return '<div class="fleet-node"><div class="fleet-dot" style="background:' + color + '"></div>' + a.name + ' <span style="opacity:.3;font-size:10px">' + a.role.split(' ')[0] + '</span></div>';
+    }).join('');
+    side.innerHTML = fleet.map(a => {
+      const color = a.online ? '#4ade80' : '#444';
+      return '<div class="side-item"><span class="side-icon" style="color:' + color + ';font-size:8px">*</span> ' + a.name + (a.online ? '' : ' <span style="opacity:.2;font-size:10px">off</span>') + '</div>';
+    }).join('');
+    document.getElementById('statNodes').textContent = online + '/' + fleet.length;
+  } catch {
+    document.getElementById('fleetStrip').innerHTML = '<span style="opacity:.3">Fleet unavailable</span>';
+  }
 }
 
 // ═══ G: HAILO ═══
@@ -592,6 +616,57 @@ function setTheme(t, quiet) {
   if (!quiet) { var el = document.getElementById('settingsSaved'); el.style.opacity = '1'; setTimeout(function(){ el.style.opacity = '0'; }, 1500); }
 }
 loadSettings();
+
+// ═══ COMMAND PALETTE (Cmd+K) ═══
+var paletteOpen = false;
+var COMMANDS = [
+  {name:'Search',key:'s',action:function(){showPanel('search');document.getElementById('searchBox').focus()}},
+  {name:'Agents',key:'a',action:function(){showPanel('agents')}},
+  {name:'Fleet',key:'f',action:function(){showPanel('fleet')}},
+  {name:'Code',key:'c',action:function(){showPanel('code')}},
+  {name:'Settings',key:',',action:function(){showPanel('settings')}},
+  {name:'Billing',key:'b',action:function(){showPanel('billing')}},
+  {name:'Vision',key:'v',action:function(){showPanel('vision')}},
+  {name:'Open Chat',key:'Enter',action:function(){window.open('https://chat.blackroad.io','_blank')}},
+  {name:'Open Search',key:'/',action:function(){window.open('https://search.blackroad.io','_blank')}},
+  {name:'Logout',key:'q',action:function(){doLogout()}},
+];
+document.addEventListener('keydown',function(e){
+  // Cmd+K or Ctrl+K opens palette
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();togglePalette();return}
+  // ? shows keyboard shortcuts
+  if(e.key==='?'&&!e.target.matches('input,textarea')){e.preventDefault();togglePalette();return}
+  // Escape closes palette
+  if(e.key==='Escape'&&paletteOpen){closePalette();return}
+});
+function togglePalette(){paletteOpen?closePalette():openPalette()}
+function openPalette(){
+  paletteOpen=true;
+  var el=document.getElementById('cmdPalette');
+  if(!el){
+    el=document.createElement('div');el.id='cmdPalette';
+    el.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.8);display:flex;align-items:flex-start;justify-content:center;padding-top:20vh';
+    document.body.appendChild(el);
+  }
+  el.style.display='flex';
+  var html='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:12px;width:480px;max-width:90vw;overflow:hidden">';
+  html+='<input id="cmdInput" placeholder="Type a command..." style="width:100%;padding:16px;border:none;border-bottom:1px solid #1a1a1a;background:transparent;color:#fff;font-size:15px;font-family:Space Grotesk,sans-serif;outline:none">';
+  html+='<div id="cmdList" style="max-height:300px;overflow-y:auto">';
+  COMMANDS.forEach(function(c,i){
+    html+='<div class="cmd-item" onclick="runCmd('+i+')" style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;font-size:14px;color:#ccc;border-bottom:1px solid #111"><span>'+c.name+'</span><kbd style="background:#1a1a1a;padding:2px 8px;border-radius:4px;font-size:11px;color:#666">'+c.key+'</kbd></div>';
+  });
+  html+='</div></div>';
+  el.innerHTML=html;
+  document.getElementById('cmdInput').focus();
+  document.getElementById('cmdInput').addEventListener('input',function(e){
+    var q=e.target.value.toLowerCase();
+    var items=el.querySelectorAll('.cmd-item');
+    items.forEach(function(item){item.style.display=item.textContent.toLowerCase().includes(q)?'flex':'none'});
+  });
+  el.addEventListener('click',function(e){if(e.target===el)closePalette()});
+}
+function closePalette(){paletteOpen=false;var el=document.getElementById('cmdPalette');if(el)el.style.display='none'}
+function runCmd(i){COMMANDS[i].action();closePalette()}
 </script>
 </body>
 </html>`;
