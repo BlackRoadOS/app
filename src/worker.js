@@ -300,7 +300,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
   <!-- E: Chat panel -->
   <div class="chat-panel">
     <div class="chat-header">Chat with Agents</div>
-    <iframe class="chat-frame" src="https://roundtrip.blackroad.io" id="chatFrame"></iframe>
+    <iframe class="chat-frame" src="https://chat.blackroad.io" id="chatFrame"></iframe>
   </div>
 </div>
 
@@ -466,11 +466,12 @@ function doSearch() {
     .then(d => {
       const results = d.results || d.items || [];
       if (!results.length) { document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">No results for "' + q + '"</p>'; return; }
-      document.getElementById('searchResults').innerHTML = results.map(r =>
-        '<div class="stat-card" style="margin-bottom:8px;cursor:pointer" onclick="window.open(\\'' + (r.url||'#') + '\\',\\'_blank\\')">' +
-        '<div class="stat-label">' + (r.domain || '') + '</div>' +
+      document.getElementById('searchResults').innerHTML = '<p style="opacity:.4;font-size:12px;margin-bottom:12px">' + results.length + ' results in ' + (d.latency_ms || '?') + 'ms</p>' + results.map(r =>
+        '<div class="stat-card" style="margin-bottom:8px;cursor:pointer;display:flex;gap:12px;align-items:flex-start" onclick="window.open(\\'' + (r.url||'#') + '\\',\\'_blank\\')">' +
+        (r.image ? '<img src="' + r.image + '" style="width:48px;height:48px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.style.display=\\'none\\'">' : '') +
+        '<div><div class="stat-label">' + (r.domain || '') + '</div>' +
         '<div style="font-size:14px;font-weight:600;margin-top:4px">' + (r.title || 'Result') + '</div>' +
-        '<p style="margin-top:4px;font-size:12px;opacity:.5;line-height:1.5">' + (r.description || r.snippet || '').slice(0,200) + '</p></div>'
+        '<p style="margin-top:4px;font-size:12px;opacity:.5;line-height:1.5">' + (r.description || r.snippet || '').slice(0,200) + '</p></div></div>'
       ).join('');
     })
     .catch(() => { document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">Search unavailable</p>'; });
