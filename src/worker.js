@@ -78,6 +78,16 @@ export default {
       return Response.json({ status: 'up', service: 'app.blackroad.io', version: '1.0.0' }, { headers: cors });
     }
 
+    // PWA manifest
+    if (path === '/manifest.json') {
+      return Response.json({ name: 'BlackRoad OS', short_name: 'BlackRoad', start_url: '/', display: 'standalone', background_color: '#000000', theme_color: '#FF2255', icons: [{ src: 'https://images.blackroad.io/pixel-art/road-logo.png', sizes: '192x192', type: 'image/png' }, { src: 'https://images.blackroad.io/pixel-art/road-logo.png', sizes: '512x512', type: 'image/png' }] }, { headers: { ...cors, 'Content-Type': 'application/manifest+json' } });
+    }
+
+    // Service worker
+    if (path === '/sw.js') {
+      return new Response("self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{});", { headers: { 'Content-Type': 'application/javascript', ...cors } });
+    }
+
     // Serve the app
     return new Response(renderApp(), { headers: { 'Content-Type': 'text/html;charset=utf-8', ...cors } });
   }
@@ -92,6 +102,10 @@ function renderApp() {
 <title>BlackRoad OS</title>
 <meta name="description" content="Your device. Your data. Your agents. Pick up your agent. Ride the BlackRoad together.">
 <link rel="icon" href="https://images.blackroad.io/pixel-art/road-logo.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#FF2255">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -185,7 +199,11 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
   .auth-visual-side{display:none}
   .auth-form-side{padding:32px 20px}
   .dashboard-view.active{grid-template-columns:1fr;grid-template-rows:52px 1fr}
-  .sidebar,.chat-panel{display:none}
+  .sidebar{display:none;position:fixed;top:52px;left:0;bottom:0;width:240px;z-index:100;background:var(--card);border-right:1px solid var(--border)}
+  .sidebar.mobile-open{display:block}
+  .chat-panel{display:none}
+  .mobile-menu-btn{display:block!important}
+  .topbar-search{max-width:200px}
 }
 </style>
 </head>
@@ -231,6 +249,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
   <div class="topbar">
     <div class="topbar-logo"><div class="topbar-mark"></div>BlackRoad</div>
     <div class="topbar-search"><input placeholder="Search everything..." id="searchInput" onkeydown="if(event.key==='Enter')doSearch()"></div>
+    <button class="mobile-menu-btn" style="display:none;background:none;border:none;color:#fff;font-size:20px;cursor:pointer" onclick="document.querySelector('.sidebar').classList.toggle('mobile-open')">&#9776;</button>
     <div class="topbar-user"><div class="topbar-dot"></div><span id="userName">User</span> <span onclick="doLogout()" style="cursor:pointer;opacity:.3;margin-left:8px;font-size:11px">[logout]</span></div>
   </div>
 
@@ -248,6 +267,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
       <div class="side-item" onclick="showPanel('search')"><span class="side-icon">?</span> Search</div>
       <div class="side-item" onclick="showPanel('vision')"><span class="side-icon">@</span> Vision</div>
       <div class="side-item" onclick="showPanel('billing')"><span class="side-icon">$</span> Billing</div>
+      <div class="side-item" onclick="showPanel('settings')"><span class="side-icon">%</span> Settings</div>
     </div>
     <div class="side-section">
       <div class="side-label">Fleet Nodes</div>
@@ -295,6 +315,40 @@ body{background:var(--bg);color:var(--white);font-family:var(--sg);min-height:10
 
     <div id="panel-code" style="display:none"><h2>Code</h2><p style="opacity:.4">1,339 repos across GitHub + Gitea</p><iframe src="https://git.blackroad.io" style="width:100%;height:600px;border:1px solid var(--border);border-radius:10px;margin-top:12px"></iframe></div>
     <div id="panel-billing" style="display:none"><h2>Billing</h2><p style="opacity:.4">RoadPay — 4 plans</p></div>
+
+    <div id="panel-settings" style="display:none">
+      <h2>Settings</h2>
+      <div style="max-width:500px">
+        <div style="margin-bottom:24px">
+          <div style="font-size:12px;opacity:.4;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Display Name</div>
+          <input class="form-input" id="settingsName" placeholder="Your name">
+        </div>
+        <div style="margin-bottom:24px">
+          <div style="font-size:12px;opacity:.4;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Default AI Model</div>
+          <select class="form-input" id="settingsModel" style="cursor:pointer">
+            <option value="fleet">BlackRoad Fleet (local Ollama)</option>
+            <option value="cf-llama">Cloudflare Llama 3.1 8B</option>
+            <option value="openai">OpenAI GPT-4o-mini (bring key)</option>
+            <option value="anthropic">Anthropic Claude (bring key)</option>
+            <option value="grok">xAI Grok (bring key)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:24px">
+          <div style="font-size:12px;opacity:.4;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">API Key (for external models)</div>
+          <input class="form-input" id="settingsApiKey" type="password" placeholder="sk-... or key-...">
+        </div>
+        <div style="margin-bottom:24px">
+          <div style="font-size:12px;opacity:.4;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Theme</div>
+          <div style="display:flex;gap:8px">
+            <button onclick="setTheme('dark')" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:#000;color:#fff;cursor:pointer;font-family:var(--sg)">Dark</button>
+            <button onclick="setTheme('midnight')" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:#0a0a1a;color:#8888ff;cursor:pointer;font-family:var(--sg)">Midnight</button>
+            <button onclick="setTheme('ember')" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:#1a0a0a;color:#FF6B2B;cursor:pointer;font-family:var(--sg)">Ember</button>
+          </div>
+        </div>
+        <button onclick="saveSettings()" style="padding:12px 24px;border:none;border-radius:8px;background:#fff;color:#000;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sg)">Save Settings</button>
+        <span id="settingsSaved" style="margin-left:12px;font-size:13px;opacity:0;transition:opacity .3s">Saved</span>
+      </div>
+    </div>
   </div>
 
   <!-- E: Chat panel -->
@@ -369,6 +423,32 @@ function enterDashboard() {
   loadAgents();
   loadFleet();
   loadHailo();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  if (!localStorage.getItem('br_onboarded')) showOnboarding();
+}
+
+function showOnboarding() {
+  const steps = [
+    {title:'Welcome to BlackRoad OS',desc:'Your sovereign AI operating system. 18 agents, 7 nodes, 1,339 repos. Everything runs on your infrastructure.'},
+    {title:'Meet Your Agents',desc:'Each agent has a role — Alice runs the gateway, Cecilia handles AI, Octavia manages DevOps. Click any agent to chat directly.'},
+    {title:'Try Searching',desc:'Search across all BlackRoad content, repos, and docs. Type anything in the search bar above.'}
+  ];
+  let step = 0;
+  const overlay = document.createElement('div');
+  overlay.id = 'onboardOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center';
+  function render() {
+    const s = steps[step];
+    const isLast = step === steps.length - 1;
+    overlay.innerHTML = '<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:16px;padding:48px;max-width:460px;text-align:center">'
+      + '<div style="font-size:11px;opacity:.4;margin-bottom:12px">Step ' + (step+1) + ' of ' + steps.length + '</div>'
+      + '<h2 style="font-size:24px;font-weight:700;margin-bottom:12px">' + s.title + '</h2>'
+      + '<p style="font-size:14px;opacity:.5;line-height:1.7;margin-bottom:32px">' + s.desc + '</p>'
+      + '<button onclick="' + (isLast ? 'localStorage.setItem(\\'br_onboarded\\',\\'1\\');document.getElementById(\\'onboardOverlay\\').remove()' : 'nextOnboard()') + '" style="padding:12px 32px;border:none;border-radius:8px;background:#fff;color:#000;font-size:14px;font-weight:600;cursor:pointer;font-family:Space Grotesk,sans-serif">' + (isLast ? 'Get Started' : 'Next') + '</button></div>';
+  }
+  window.nextOnboard = function() { step++; render(); };
+  render();
+  document.body.appendChild(overlay);
 }
 
 async function loadKPIs() {
@@ -476,6 +556,36 @@ function doSearch() {
     })
     .catch(() => { document.getElementById('searchResults').innerHTML = '<p style="opacity:.4">Search unavailable</p>'; });
 }
+
+// ═══ H: SETTINGS ═══
+function loadSettings() {
+  var s = JSON.parse(localStorage.getItem('br_settings') || '{}');
+  if (s.name) document.getElementById('settingsName').value = s.name;
+  if (s.model) document.getElementById('settingsModel').value = s.model;
+  if (s.apiKey) document.getElementById('settingsApiKey').value = s.apiKey;
+  if (s.theme) setTheme(s.theme, true);
+}
+function saveSettings() {
+  var s = {
+    name: document.getElementById('settingsName').value,
+    model: document.getElementById('settingsModel').value,
+    apiKey: document.getElementById('settingsApiKey').value,
+    theme: localStorage.getItem('br_theme') || 'dark'
+  };
+  localStorage.setItem('br_settings', JSON.stringify(s));
+  if (s.name && authUser) { authUser.name = s.name; localStorage.setItem('br_user', JSON.stringify(authUser)); document.getElementById('userName').textContent = s.name; }
+  var el = document.getElementById('settingsSaved');
+  el.style.opacity = '1'; setTimeout(function(){ el.style.opacity = '0'; }, 2000);
+}
+function setTheme(t, quiet) {
+  localStorage.setItem('br_theme', t);
+  var r = document.documentElement.style;
+  if (t === 'midnight') { r.setProperty('--bg','#050510'); r.setProperty('--card','#0a0a1a'); r.setProperty('--border','#1a1a2a'); r.setProperty('--elevated','#10102a'); }
+  else if (t === 'ember') { r.setProperty('--bg','#0a0500'); r.setProperty('--card','#1a0a0a'); r.setProperty('--border','#2a1a1a'); r.setProperty('--elevated','#2a1510'); }
+  else { r.setProperty('--bg','#000'); r.setProperty('--card','#0a0a0a'); r.setProperty('--border','#1a1a1a'); r.setProperty('--elevated','#111'); }
+  if (!quiet) { var el = document.getElementById('settingsSaved'); el.style.opacity = '1'; setTimeout(function(){ el.style.opacity = '0'; }, 1500); }
+}
+loadSettings();
 </script>
 </body>
 </html>`;
