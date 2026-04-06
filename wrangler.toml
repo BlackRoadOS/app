@@ -1,13 +1,12 @@
-name = "app-blackroad"
+name = "os-blackroad"
 main = "src/worker.js"
-compatibility_date = "2024-12-01"
-workers_dev = true
+compatibility_date = "2026-03-31"
 
-routes = [
-  { pattern = "app.blackroad.io/*", zone_name = "blackroad.io" }
-]
+[[routes]]
+pattern = "os.blackroad.io/*"
+zone_name = "blackroad.io"
 
-[vars]
-AUTH_URL = "https://auth.blackroad.io"
-PAY_URL = "https://pay.blackroad.io"
-CHAT_URL = "https://chat.blackroad.io"
+[[d1_databases]]
+binding = "DB"
+database_name = "blackroad-os-analytics"
+database_id = "a244526c-d9b4-48aa-854e-c7132080dd8a"
